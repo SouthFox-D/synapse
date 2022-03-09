@@ -21,7 +21,7 @@ echo "--- Prepare test database"
 poetry run update_synapse_database --database-config .ci/sqlite-config.yaml --run-background-updates
 
 # Create the PostgreSQL database.
-.ci/scripts/postgres_exec.py "CREATE DATABASE synapse"
+poetry run .ci/scripts/postgres_exec.py "CREATE DATABASE synapse"
 
 echo "+++ Run synapse_port_db against test database"
 # TODO: this invocation of synapse_port_db (and others below) used to be prepended with `coverage run`,
@@ -44,7 +44,7 @@ rm .ci/test_db.db
 poetry run update_synapse_database --database-config .ci/sqlite-config.yaml --run-background-updates
 
 # re-create the PostgreSQL database.
-.ci/scripts/postgres_exec.py \
+poetry run .ci/scripts/postgres_exec.py \
   "DROP DATABASE synapse" \
   "CREATE DATABASE synapse"
 
