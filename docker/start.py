@@ -9,8 +9,8 @@ import sys
 
 import jinja2
 
-
 VIRTUALENV_INTERPRETER = "/synapse/.venv/bin/python"
+
 
 # Utility functions
 def log(txt):
