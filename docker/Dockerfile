@@ -22,19 +22,21 @@ FROM docker.io/python:${PYTHON_VERSION}-slim as base
 ### Stage 0: builder
 ###
 
-# Irritatingly, there is no blessed guide on how to deploy a poetry application.
+# Irritatingly, there is no blessed guide on how to distribute an application with its
+# poetry-managed environment in a docker image. For a while,
+# `poetry export | pip install -r /dev/stdin` seemed plausible but is limited by bugs
+# in `poetry export` whose fixes (scheduled for poetry 1.2) have yet to be released.
 # The best references I could find are
 #     https://github.com/python-poetry/poetry/discussions/1879#discussioncomment-216865
 #     https://stackoverflow.com/questions/53835198/integrating-python-poetry-with-docker?answertab=scoredesc#tab-top
 FROM base as builder
 
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true \
-    POETRY_VIRTUALENVS_CREATE=true
-
 # RUN --mount is specific to buildkit and is documented at
 # https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#build-mounts-run---mount.
 # Here we use it to set up a cache for pip (below, for apt and poetry), to improve
 # rebuild speeds on slow connections.
+# We install poetry as --user so that it doesn't end up in the system-wide python
+# installation. That gets copied later into the runtime image.
 RUN --mount=type=cache,target=/root/.cache/pip \
   pip install poetry==1.1.12
 
@@ -61,14 +63,19 @@ WORKDIR /synapse
 # Copy just what we need to poetry install
 COPY pyproject.toml poetry.lock README.rst /synapse/
 
+# Install to the Python installation which hosts `pip`. In this case, it's the system
+# Python.
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_VIRTUALENVS_CREATE=true \
+    POETRY_HOME=/opt/poetry
 # To speed up rebuilds, install all of the dependencies before we copy over
 # the whole synapse project, so that this layer in the Docker cache can be
 # used while you develop on the source
-RUN --mount=type=cache,target=/root/.cache/pypoetry/artifacts \
-    --mount=type=cache,target=/root/.cache/pypoetry/cache \
+RUN --mount=type=cache,target=/opt/poetry/artifacts \
+    --mount=type=cache,target=/opt/poetry/.cache/pypoetry/cache \
   poetry install --no-dev --no-root --no-interaction --no-ansi --extras all
 
-# Copy over the rest of the project
+# Copy over the synapse source code.
 COPY synapse /synapse/synapse/
 
 # Install the synapse package itself, by omitting the --no-root argument
@@ -108,7 +115,7 @@ COPY ./docker/conf /conf
 
 EXPOSE 8008/tcp 8009/tcp 8448/tcp
 
-ENTRYPOINT ["/synapse/.venv/bin/python", "/start.py"]
+ENTRYPOINT ["/start.py"]
 
 HEALTHCHECK --start-period=5s --interval=15s --timeout=5s \
     CMD curl -fSs http://localhost:8008/health || exit 1
